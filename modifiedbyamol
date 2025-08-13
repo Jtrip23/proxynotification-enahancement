@@ -1,0 +1,212 @@
+variables:
+  FAILED_STAGE: $FAILED_STAGE
+  pipelineType: "gitlab" 
+  USERMAIL: "$GITLAB_USER_EMAIL"
+  EMAIL_SENDER: "svc-fmk@fiserv.com"
+  EMAIL_SERVER: "jc-outbd-C.mailhost.onefiserv.net"
+  EMAIL_SERVER_PORT_SECURE: "587"
+  EMAIL_SERVER_PORT_INSECURE: "25"
+  EMAIL_SERVER_PORT: ${EMAIL_SERVER_PORT_INSECURE}
+  GROUP_NAME: $gitlab_group
+  
+stages:
+    - notify
+    
+notify_success:
+  tags:
+    - $APIGEE_SHELL_RUNNGER_TAG
+  stage: notify
+  allow_failure: true
+  script:
+   - |
+      echo $CI_JOB_STAGE
+      echo $CI_COMMIT_SHORT_SHA > commit_id
+      cat commit_id
+            
+      if [[ "$TRACKING_ID" == *-sync ]]; then
+        if [ "$PIPELINE_TYPE" == "proxy-gen" ]; then
+          PIPELINE_TYPE="proxy-sync"
+        elif [ "$PIPELINE_TYPE" == "shared-flow-gen" ]; then
+          PIPELINE_TYPE="shared-flow-sync"
+        fi
+      fi
+
+      echo $TRACKING_ID
+      echo $CI_PIPELINE_ID
+      echo $pipelineErrorDetails
+      echo $pipelineType
+      echo $CI_PROJECT_ID
+      echo ${PIPELINE_TYPE}
+      # Retrieve JWT token
+      JWT_TOKEN=$(curl --location --request POST "$APIGEE_JWT_TOKEN_URL" \
+                  --header 'Content-Type: application/x-www-form-urlencoded' \
+                  --header 'Authorization: Basic TWg5VktuaVc5cktWa0JSWllvYW1HWjlrNWhHQ25yQ3E6cE5WalBkQmduNzZ2MUkwQTloQkZSQkd0aTRpaHhrMWpPc0FvOU1MWmdPUg==' \
+                  --data-urlencode 'alg=RS256' \
+                  --data-urlencode 'clientId=Mh9VKniW9rKVkBRZYoamGZ9k5hGCnrCq' | grep -o '"access_token":"[^"]*' | sed 's/"access_token":"//' | tr -d '"')
+      echo $JWT_TOKEN
+      echo "$JWT_TOKEN" | cut -d '.' -f2 | base64 -d | jq
+
+      echo "curl --location --request PUT $APIGEE_MS_URL/$PIPELINE_TYPE/update-status"
+      curl --location --request PUT "$APIGEE_MS_URL/${PIPELINE_TYPE}/update-status" --header 'Content-Type: application/json' --header "Authorization: Bearer ${JWT_TOKEN}" --data "{\"trackingId\":\"${TRACKING_ID}\",\"commitId\":\"${CI_COMMIT_SHORT_SHA}\",\"scmOnboardStatus\":\"success\",\"pipelineStatus\":\"success\",\"pipelineFailedStage\":\"NA\",\"pipelineId\":\"${CI_PIPELINE_ID}\",\"pipelineErrorDetails\":\"NA\", \"pipelineType\":\"${pipelineType}\",\"projectId\":\"${CI_PROJECT_ID}\",\"refBranch\":\"${CI_COMMIT_REF_NAME}\"}"
+
+
+notify_fail:
+  tags:
+    - $APIGEE_SHELL_RUNNGER_TAG
+  stage: notify
+  allow_failure: true
+  when: always
+  script:
+    - echo "$CI_JOB_STAGE"
+    - echo "$CI_COMMIT_SHORT_SHA" > commit_id
+    - cat commit_id
+    - echo "CI_PROJECT_PATH:$CI_PROJECT_PATH"
+    #- echo "Fetching optional job list from GitLab API..."
+    - >
+      #FAILED_OPTIONAL_JOBS_DETAILS=$(curl --silent --header "PRIVATE-TOKEN:rAYzVisftxEeU6nb2VSi" "https://gitlab.onefiserv.net/api/v4/projects/$CI_PROJECT_ID/pipelines/$CI_PIPELINE_ID/jobs" | grep -E '"id"|"name"|"status"|"allow_failure"' | sed 's/[",]//g' | awk '/id:/ {id=$2} /name:/ {name=$2} /status:/ {status=$2} /allow_failure:/ {allow_failure=$2; if (status == "failed" && allow_failure == "true") { printf "%s: https://gitlab.onefiserv.net/%s/-/jobs/%s\\n", name, ENVIRON["CI_PROJECT_PATH"], id }}')
+      #FAILED_OPTIONAL_JOBS_DETAILS=$(curl --silent --header "PRIVATE-TOKEN: rAYzVisftxEeU6nb2VSi" "https://gitlab.onefiserv.net/api/v4/projects/$CI_PROJECT_ID/pipelines/$CI_PIPELINE_ID/jobs" | awk -v path="$CI_PROJECT_PATH" '/"id":/ { id=$2 } /"name":/ { name=$2 } /"status":/ { status=$2 } /"allow_failure":/ { allow_failure=$2; if (status == "\"failed\"" && allow_failure == "true") { gsub(/"/, "", name); gsub(/,/, "", id); printf "%s: https://gitlab.onefiserv.net/%s/-/jobs/%s\n", name, path, id } }')
+      #FAILED_OPTIONAL_JOBS_DETAILS=$(curl --silent --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" "https://gitlab.onefiserv.net/api/v4/projects/$CI_PROJECT_ID/pipelines/$CI_PIPELINE_ID/jobs" | tr -d '\n' | sed 's/},{/}\n{/g' | awk -v path="$CI_PROJECT_PATH" '/"status":"failed"/ && /"allow_failure":true/ {match($0, /"id":([0-9]+)/, id_arr); match($0, /"name":"([^"]+)"/, name_arr); if (id_arr[1] && name_arr[1]) {printf "%s: https://gitlab.onefiserv.net/%s/-/jobs/%s\n", name_arr[1], path, id_arr[1]}}')
+    #- echo "FAILED_OPTIONAL_JOBS_DETAILS:"
+    #- echo "$FAILED_OPTIONAL_JOBS_DETAILS"
+    - echo "Fetching job list from GitLab API..."
+    #- curl --silent --header "PRIVATE-TOKEN:rAYzVisftxEeU6nb2VSi" "https://gitlab.onefiserv.net/api/v4/projects/$CI_PROJECT_ID/pipelines/$CI_PIPELINE_ID/jobs" | tr -d '\n' | sed 's/},{/}\n{/g' | awk '/"status":"failed"/ && /"allow_failure":true/'
+
+    #- curl --silent --header "PRIVATE-TOKEN:rAYzVisftxEeU6nb2VSi" "https://gitlab.onefiserv.net/api/v4/projects/$CI_PROJECT_ID/pipelines/$CI_PIPELINE_ID/jobs"
+    #- curl --silent --header "PRIVATE-TOKEN:rAYzVisftxEeU6nb2VSi" "https://gitlab.onefiserv.net/api/v4/projects/$CI_PROJECT_ID/pipelines/$CI_PIPELINE_ID/jobs" | grep -E '"name"|"status"|"allow_failure"'
+    - echo "Fetching failed jobs..."
+    - FAILED_OPTIONAL_JOBS_DETAILS=$(curl --silent --header "PRIVATE-TOKEN:rAYzVisftxEeU6nb2VSi" "https://gitlab.onefiserv.net/api/v4/projects/$CI_PROJECT_ID/pipelines/$CI_PIPELINE_ID/jobs" | tr -d '\n' | sed 's/},{/}\n{/g' | awk -v path="$CI_PROJECT_PATH" '/"status":"failed"/ && /"allow_failure":true/ { match($0, /"id":([0-9]+)/, id_arr); match($0, /"name":"([^"]+)"/, name_arr); if (id_arr[1] && name_arr[1]) { printf "%s:https://gitlab.onefiserv.net/%s/-/jobs/%s\n", name_arr[1], path, id_arr[1] } }')
+    - echo "$FAILED_OPTIONAL_JOBS_DETAILS"
+    - >
+      if [ -n "$FAILED_OPTIONAL_JOBS_DETAILS" ]; then echo "Detected failed optional jobs:"; echo "$FAILED_OPTIONAL_JOBS_DETAILS"; export LAST_EXECUTED_STAGE_NAME="optional-job-failure"; export LAST_EXECUTED_STAGE_URL="https://gitlab.onefiserv.net/$CI_PROJECT_PATH/-/pipelines/$CI_PIPELINE_ID"; export pipelineErrorDetails=$(echo "$FAILED_OPTIONAL_JOBS_DETAILS" | sed ':a;N;$!ba;s/\n/\\n/g'); fi
+    - >
+      if [[ "$TRACKING_ID" == *-sync ]]; then if [ "$PIPELINE_TYPE" == "proxy-gen" ]; then PIPELINE_TYPE="proxy-sync"; elif [ "$PIPELINE_TYPE" == "shared-flow-gen" ]; then PIPELINE_TYPE="shared-flow-sync"; fi; fi
+    - echo "$FAILED_STAGE"
+    - echo "$TRACKING_ID"
+    - echo "$CI_PIPELINE_ID"
+    - echo "$pipelineErrorDetails"
+    - echo "$pipelineType"
+    - echo "$CI_PROJECT_ID"
+    - echo "${PIPELINE_TYPE}"
+    - |
+      JWT_TOKEN=$(curl --location --request POST "$APIGEE_JWT_TOKEN_URL" \
+                  --header 'Content-Type: application/x-www-form-urlencoded' \
+                  --header 'Authorization: Basic TWg5VktuaVc5cktWa0JSWllvYW1HWjlrNWhHQ25yQ3E6cE5WalBkQmduNzZ2MUkwQTloQkZSQkd0aTRpaHhrMWpPc0FvOU1MWmdPUg==' \
+                  --data-urlencode 'alg=RS256' \
+                  --data-urlencode 'clientId=Mh9VKniW9rKVkBRZYoamGZ9k5hGCnrCq' | grep -o '"access_token":"[^"]*' | sed 's/"access_token":"//' | tr -d '"')
+      #echo "Token: $JWT_TOKEN"
+      #echo "FAILED_STAGE: $LAST_EXECUTED_STAGE_NAME"
+      #echo "ERROR_DETAILS: $LAST_EXECUTED_STAGE_URL"
+      echo "FAILED_STAGE: optional-job-failure"
+      echo -e "ERROR_DETAILS:\n$FAILED_OPTIONAL_JOBS_DETAILS"
+
+    - >
+      echo "{\"trackingId\":\"${TRACKING_ID}\",\"commitId\":\"${CI_COMMIT_SHORT_SHA}\",\"scmOnboardStatus\":\"success\",\"pipelineStatus\":\"failed\",\"pipelineFailedStage\":\"${LAST_EXECUTED_STAGE_NAME:-unknown}\",\"pipelineId\":\"${CI_PIPELINE_ID}\",\"pipelineErrorDetails\":\"${pipelineErrorDetails:-unable_to_retrieve_pipeline_error_details__internal_error}\",\"pipelineType\":\"${pipelineType}\",\"projectId\":\"${CI_PROJECT_ID}\",\"refBranch\":\"${CI_COMMIT_REF_NAME}\"}" | curl --location --request PUT "$APIGEE_MS_URL/${PIPELINE_TYPE}/update-status" --header 'Content-Type: application/json' --header "Authorization: Bearer ${JWT_TOKEN}" --data @- -vvv
+
+
+noitfy_pipeline_success:
+  tags:
+    - apimhub
+  image: $APIGEE_EMAIL_IMAGE
+  stage: notify
+  allow_failure: true
+  when: on_success
+  script:
+    - |
+      echo "Initiating pipeline success notification mail"
+      git clone --depth 1 -b $CI_COMMIT_REF_NAME https://${APIGEE_GIT_USER}@gitlab.onefiserv.net/fts-apimanagement/email-templates.git templates/emails
+      rm -rf /etc/ssmtp/ssmtp.conf
+      touch /etc/ssmtp/ssmtp.conf 
+      CURRENT_COMMIT_AUTHOR_EMAIL=$(git log -1 --format="%ae")
+      CURRENT_COMMIT_AUTHOR_INFO=$(git log -1 --format="%an <%ae>")
+      declare -A conversion_table
+      conversion_table=(["caches"]="Cache" ["keyvaluemaps"]="Key Value Map" ["targetservers"]="Target Server" ["resourcefiles"]="Resource File" ["flowhooks"]="Flow Hook" ["apiproducts"]="API Product" ["developers"]="Developer" ["apps"]="Developer App" ["exportAppKeys"]="Export App Key" ["reports"]="Report" ["references"]="Reference" ["keystores"]="Keystore" ["aliases"]="Alias" ["importKeys"]="Import Key" ["apicategories"]="API Category" ["apidocs"]="API Doc")
+      if [[ $PIPELINE_TYPE == *"config"* ]]; then
+        RESOURCE_TYPE=${conversion_table[$APIGEE_CONFIG_TYPE]}
+      elif [[ $PIPELINE_TYPE == *"proxy"* ]]; then
+        RESOURCE_TYPE="API Proxy"
+      elif [[ $PIPELINE_TYPE == *"shared"* ]]; then
+        RESOURCE_TYPE="Shared Flow"
+      else
+        echo "PIPELINE_TYPE does not contain 'config', 'proxy', or 'shared'"
+        RESOURCE_TYPE="Not Provided"
+      fi
+      sed -i "s/{CI_PROJECT_NAME}/$CI_PROJECT_NAME/g" "./templates/emails/pipeline_success_notification_template.html"
+      sed -i "s/{CI_COMMIT_SHORT_SHA}/$CI_COMMIT_SHORT_SHA/g" "./templates/emails/pipeline_success_notification_template.html"
+      sed -i "s/{CURRENT_COMMIT_AUTHOR_INFO}/$CURRENT_COMMIT_AUTHOR_INFO/g" "./templates/emails/pipeline_success_notification_template.html"
+      sed -i "s/{CI_PIPELINE_ID}/$CI_PIPELINE_ID/g" "./templates/emails/pipeline_success_notification_template.html"
+      sed -i "s|{CI_PIPELINE_URL}|$CI_PIPELINE_URL|g" "./templates/emails/pipeline_success_notification_template.html"
+      sed -i "s/{GITLAB_USER_NAME}/$GITLAB_USER_NAME/g" "./templates/emails/pipeline_success_notification_template.html"
+      sed -i "s/{USERMAIL}/$USERMAIL/g" "./templates/emails/pipeline_success_notification_template.html"
+      sed -i "s/{RESOURCE_TYPE}/$RESOURCE_TYPE/g" "./templates/emails/pipeline_success_notification_template.html"
+      sed -i "s/{CI_COMMIT_REF_NAME}/$CI_COMMIT_REF_NAME/g" "./templates/emails/pipeline_success_notification_template.html"
+    - |
+      cat << EOF >> /etc/ssmtp/ssmtp.conf
+      root=noreply@git-enterprise-jc.onefiserv.net
+      mailhub=$EMAIL_SERVER:$EMAIL_SERVER_PORT
+      FromLineOverride=YES
+      UseTLS=false
+      Debug=YES
+      EOF
+    - |
+      echo "From: API Hub Notification <svc-fmk@fiserv.com>" >> msg.txt
+      echo "MIME-Version: 1.0" >> msg.txt
+      echo "Date: $(date)" >> msg.txt
+      echo "Content-Type: text/html">> msg.txt
+      echo "Subject: API Hub: $CI_PROJECT_NAME Pipeline Succeeded" >> msg.txt
+      echo " " >> msg.txt
+      cat ./templates/emails/pipeline_success_notification_template.html >> msg.txt
+    - ssmtp $USERMAIL,$CURRENT_COMMIT_AUTHOR_EMAIL < msg.txt
+
+notify_pipeline_fail:
+  tags:
+    - apimhub
+  image: $APIGEE_EMAIL_IMAGE
+  stage: notify
+  allow_failure: true
+  when: on_failure
+  script:
+    - |
+      echo "Initiating pipeline failure notification mail"
+      git clone --depth 1 -b $CI_COMMIT_REF_NAME https://${APIGEE_GIT_USER}@gitlab.onefiserv.net/fts-apimanagement/email-templates.git templates/emails
+      rm -rf /etc/ssmtp/ssmtp.conf
+      touch /etc/ssmtp/ssmtp.conf 
+      CURRENT_COMMIT_AUTHOR_EMAIL=$(git log -1 --format="%ae")
+      CURRENT_COMMIT_AUTHOR_INFO=$(git log -1 --format="%an <%ae>")
+      declare -A conversion_table
+      conversion_table=(["caches"]="Cache" ["keyvaluemaps"]="Key Value Map" ["targetservers"]="Target Server" ["resourcefiles"]="Resource File" ["flowhooks"]="Flow Hook" ["apiproducts"]="API Product" ["developers"]="Developer" ["apps"]="Developer App" ["exportAppKeys"]="Export App Key" ["reports"]="Report" ["references"]="Reference" ["keystores"]="Keystore" ["aliases"]="Alias" ["importKeys"]="Import Key" ["apicategories"]="API Category" ["apidocs"]="API Doc")
+      if [[ $PIPELINE_TYPE == *"config"* ]]; then
+        RESOURCE_TYPE=${conversion_table[$APIGEE_CONFIG_TYPE]}
+      elif [[ $PIPELINE_TYPE == *"proxy"* ]]; then
+        RESOURCE_TYPE="API Proxy"
+      elif [[ $PIPELINE_TYPE == *"shared"* ]]; then
+        RESOURCE_TYPE="Shared Flow"
+      else
+        echo "PIPELINE_TYPE does not contain 'config', 'proxy', or 'shared'"
+        RESOURCE_TYPE="Not Provided"
+      fi
+      sed -i "s/{CI_PROJECT_NAME}/$CI_PROJECT_NAME/g" "./templates/emails/pipeline_failure_notification_template.html"
+      sed -i "s/{CI_COMMIT_SHORT_SHA}/$CI_COMMIT_SHORT_SHA/g" "./templates/emails/pipeline_failure_notification_template.html"
+      sed -i "s/{CURRENT_COMMIT_AUTHOR_INFO}/$CURRENT_COMMIT_AUTHOR_INFO/g" "./templates/emails/pipeline_failure_notification_template.html"
+      sed -i "s/{CI_PIPELINE_ID}/$CI_PIPELINE_ID/g" "./templates/emails/pipeline_failure_notification_template.html"
+      sed -i "s|{CI_PIPELINE_URL}|$CI_PIPELINE_URL|g" "./templates/emails/pipeline_failure_notification_template.html"
+      sed -i "s/{GITLAB_USER_NAME}/$GITLAB_USER_NAME/g" "./templates/emails/pipeline_failure_notification_template.html"
+      sed -i "s/{USERMAIL}/$USERMAIL/g" "./templates/emails/pipeline_failure_notification_template.html"
+      sed -i "s/{RESOURCE_TYPE}/$RESOURCE_TYPE/g" "./templates/emails/pipeline_failure_notification_template.html"
+      sed -i "s/{CI_COMMIT_REF_NAME}/$CI_COMMIT_REF_NAME/g" "./templates/emails/pipeline_failure_notification_template.html"
+    - |
+      cat << EOF >> /etc/ssmtp/ssmtp.conf
+      root=noreply@git-enterprise-jc.onefiserv.net
+      mailhub=$EMAIL_SERVER:$EMAIL_SERVER_PORT
+      FromLineOverride=YES
+      UseTLS=false
+      Debug=YES
+      EOF
+    - |
+      echo "From: API Hub Notification <svc-fmk@fiserv.com>" >> msg.txt
+      echo "MIME-Version: 1.0" >> msg.txt
+      echo "Date: $(date)" >> msg.txt
+      echo "Content-Type: text/html">> msg.txt
+      echo "Subject: API Hub: $CI_PROJECT_NAME Pipeline Failed" >> msg.txt
+      echo " " >> msg.txt
+      cat ./templates/emails/pipeline_failure_notification_template.html >> msg.txt
+    - ssmtp $USERMAIL,$CURRENT_COMMIT_AUTHOR_EMAIL < msg.txt
