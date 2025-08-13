@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Gitlab Pipeline Failure</title>
+</head>
+
+<body>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#ffffff">
+        <tr>
+            <td align="center">
+                <table cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#f8f8f8">
+                    <tr>
+                        <td align="center" style="color: white; height: 100px; position: relative; text-align: center; background-color: #ff6600 !important;">
+                            <div style="position: absolute; left: 50%; transform: translateX(-50%);">
+                                <img src="https://apihub.onefiserv.net/themes/custom/apihub/img/APIHUB(Black,White)Logo.svg" alt="Gitlab Pipeline Failed" style="max-height: 100%; max-width: 100%;;margin-top: 17px;">
+                            </div>
+                            <h1 style="margin-top: 46px;">Pipeline Status</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:20px">
+                            <table cellpadding="0" cellspacing="0" border="0" style="width:100%">
+                                <tr>
+                                    <td style="width:60%">
+                                        <p>The following pipeline has failed</p>
+                                        <p><strong>{CI_PROJECT_NAME}</strong></p>
+                                        <table cellpadding="0" cellspacing="0" border="0"
+                                            style="width:100%;height:100%;border-radius:10px;background-color:#fff">
+                                            <tr style="height:100%">
+                                                <td>
+                                                    <table cellpadding="0" cellspacing="0" border="0"
+                                                        style="width:100%">
+                                                        <tr>
+                                                            <td style="font-weight:600;padding:10px;width:30%">Resource Type
+                                                            </td>
+                                                            <td style="padding-left:20px;padding:10px">
+                                                                {RESOURCE_TYPE}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="font-weight:600;padding:10px;width:30%">Branch
+                                                            </td>
+                                                            <td style="padding-left:20px;padding:10px">
+                                                                {CI_COMMIT_REF_NAME}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="font-weight:600;padding:10px;width:30%">Commit ID
+                                                            </td>
+                                                            <td style="padding-left:20px;padding:10px">
+                                                                {CI_COMMIT_SHORT_SHA}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="font-weight:600;padding:10px;width:30%">Commit
+                                                                Author</td>
+                                                            <td style="padding-left:20px;padding:10px">
+                                                                {CURRENT_COMMIT_AUTHOR_INFO}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="font-weight:600;padding:10px;width:30%">Pipeline
+                                                                ID</td>
+                                                            <td style="padding-left:20px;padding:10px">{CI_PIPELINE_ID}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="font-weight:600;padding:10px;width:30%">Triggered
+                                                                by</td>
+                                                            <td style="padding-left:20px;padding:10px">
+                                                                {GITLAB_USER_NAME}<br>{USERMAIL}</td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td style="width:40%;text-align:center"><img
+                                            src="https://apihub.onefiserv.net/themes/custom/apihub/img/Pipeline_Status_Faild.svg"
+                                            alt="Pipeline Failure"
+                                            style="max-width:100%;height:auto;display:block;margin:0 auto">
+                                        <p style="margin-top:10px"><a href="{CI_PIPELINE_URL}"><button
+                                                    style="background-color:#f60;color:#fff;border:none;border-radius:5px;padding:10px 20px;cursor:pointer">VIEW
+                                                    THE PIPELINE</button></a></p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center">
+                            <div
+                                style="display:flex;flex-direction:column;align-items:center;padding-top:35px;background-color:#fff">
+                                <p style="margin-bottom:0;margin-top:0">Have any questions?</p>
+                                <p style="margin-bottom:0;margin-top:0">Please contact&nbsp;<strong><a
+                                            href="mailto:DL-NA-APIhub@fiserv.com"
+                                            style="color:#000">DL-NA-APIhub@fiserv.com</a></strong></p>
+                                <p style="margin-bottom:0;margin-top:0">Visit our&nbsp;<a href="https://apihub.onefiserv.net/support"
+                                        style="color:#f60;text-decoration:underline">Support Page</a>&nbsp;for more
+                                    information</p>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>
